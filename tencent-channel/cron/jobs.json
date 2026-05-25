@@ -1,0 +1,140 @@
+{
+  "jobs": [
+    {
+      "id": "1a27802e2c61",
+      "name": "Wallpaper\u58c1\u7eb8\u5e93\u51b7\u5ea6\u68c0\u6d4b\u81ea\u52a8\u53d1\u5e16",
+      "prompt": "\u6267\u884c /root/.hermes/profiles/tencent-channel/scripts/wallpaper_cold_detect_v2.1.py",
+      "skills": [
+        "wallhaven-api",
+        "tencent-channel-community"
+      ],
+      "skill": "wallhaven-api",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 7-23 * * *",
+        "display": "0 7-23 * * *"
+      },
+      "schedule_display": "0 7-23 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 679
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-15T17:25:01.897801+08:00",
+      "next_run_at": "2026-05-25T16:00:00+08:00",
+      "last_run_at": "2026-05-25T15:00:17.495568+08:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "ca13f6909bd9",
+      "name": "\u6e05\u7406media\u76ee\u5f55\u65e7\u56fe\u7247",
+      "prompt": "\u6267\u884c /root/.hermes/profiles/tencent-channel/scripts/cleanup_media.py",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * *",
+        "display": "0 3 * * *"
+      },
+      "schedule_display": "0 3 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 41
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-15T17:30:34.370495+08:00",
+      "next_run_at": "2026-05-26T03:00:00+08:00",
+      "last_run_at": "2026-05-25T03:00:17.688435+08:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "08ca34cb4bb4",
+      "name": "\u714e\u86cb\u6811\u6d1e\u540c\u6b65\u5230\u5e9f\u8bdd\u56de\u6536\u7ad9",
+      "prompt": "\u6267\u884c /root/.hermes/profiles/tencent-channel/scripts/sync_jandan_treehole.py",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 * * * *",
+        "display": "30 * * * *"
+      },
+      "schedule_display": "30 * * * *",
+      "repeat": {
+        "times": null,
+        "completed": 597
+      },
+      "enabled": false,
+      "state": "paused",
+      "paused_at": "2026-05-11T10:39:43.352427+08:00",
+      "paused_reason": null,
+      "created_at": "2026-04-16T14:31:48.154203+08:00",
+      "next_run_at": "2026-05-11T11:30:00+08:00",
+      "last_run_at": "2026-05-11T10:32:48.674491+08:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": "no delivery target resolved for deliver=origin",
+      "deliver": "origin",
+      "origin": null
+    },
+    {
+      "id": "6a9594fb7bdf",
+      "name": "Wallhaven\u58c1\u7eb8\u5e93\u51b7\u5ea6\u68c0\u6d4b\u81ea\u52a8\u53d1\u5e16",
+      "prompt": "\u6267\u884c /root/.hermes/profiles/tencent-channel/scripts/wallhaven_cold_detect_v2.2.py",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 7-23 * * *",
+        "display": "0 7-23 * * *"
+      },
+      "schedule_display": "0 7-23 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 243
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-05-11T10:53:08.023943+08:00",
+      "next_run_at": "2026-05-25T16:00:00+08:00",
+      "last_run_at": "2026-05-25T15:00:33.627982+08:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    }
+  ],
+  "updated_at": "2026-05-25T15:00:33.628582+08:00"
+}

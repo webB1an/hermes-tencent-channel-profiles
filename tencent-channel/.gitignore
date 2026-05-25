@@ -1,0 +1,33 @@
+# ===== 运行时产物：每次跑脚本都会生成，不该进版本库 =====
+
+# 壁纸图片
+media/
+
+# Session 文件 + jsonl 日志
+sessions/
+
+# Cron 输出
+cron/output/
+
+# 日志
+logs/
+
+# 运行时状态（bot 进程产生）
+state/
+state.db
+state.db-shm
+state.db-wal
+wallpaper_state.json
+wallhaven_state.json
+models_dev_cache.json
+processes.json
+feishu_seen_message_ids.json
+channel_directory.json
+.skills_prompt_snapshot.json
+
+# Python 缓存
+scripts/__pycache__/
+*.pyc
+*.pyo
+
+# ===== jobs.json 由 cron 系统自己管理，不手动维护，进版本库意义不大 ===== #（如需确保留档可单独 track，这里不控制）

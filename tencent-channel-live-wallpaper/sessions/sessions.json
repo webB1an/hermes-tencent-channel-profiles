@@ -1,0 +1,62 @@
+{
+  "agent:main:feishu:dm:oc_87f8aeb4b48fb2236f3a686de9118697": {
+    "session_key": "agent:main:feishu:dm:oc_87f8aeb4b48fb2236f3a686de9118697",
+    "session_id": "20260510_142915_d701c2c8",
+    "created_at": "2026-05-12T11:02:19.504946",
+    "updated_at": "2026-05-12T11:03:23.505542",
+    "display_name": "oc_87f8aeb4b48fb2236f3a686de9118697",
+    "platform": "feishu",
+    "chat_type": "dm",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "total_tokens": 0,
+    "last_prompt_tokens": 18097,
+    "estimated_cost_usd": 0.0,
+    "cost_status": "unknown",
+    "memory_flushed": true,
+    "suspended": false,
+    "origin": {
+      "platform": "feishu",
+      "chat_id": "oc_87f8aeb4b48fb2236f3a686de9118697",
+      "chat_name": "oc_87f8aeb4b48fb2236f3a686de9118697",
+      "chat_type": "dm",
+      "user_id": "ou_bc58e2ce0d9d5487da0b95c092d5614c",
+      "user_name": null,
+      "thread_id": null,
+      "chat_topic": null,
+      "user_id_alt": "on_487ebc0820ae926542f828b3b2092a7a"
+    }
+  },
+  "agent:main:feishu:dm:oc_50ed6f88a1b4a979aeee2e6cfe277e02": {
+    "session_key": "agent:main:feishu:dm:oc_50ed6f88a1b4a979aeee2e6cfe277e02",
+    "session_id": "20260525_074927_0c22d4d6",
+    "created_at": "2026-05-25T07:49:27.796790",
+    "updated_at": "2026-05-25T11:42:58.222931",
+    "display_name": "oc_50ed6f88a1b4a979aeee2e6cfe277e02",
+    "platform": "feishu",
+    "chat_type": "dm",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "total_tokens": 0,
+    "last_prompt_tokens": 18966,
+    "estimated_cost_usd": 0.0,
+    "cost_status": "unknown",
+    "memory_flushed": false,
+    "suspended": false,
+    "origin": {
+      "platform": "feishu",
+      "chat_id": "oc_50ed6f88a1b4a979aeee2e6cfe277e02",
+      "chat_name": "oc_50ed6f88a1b4a979aeee2e6cfe277e02",
+      "chat_type": "dm",
+      "user_id": "ou_96f3a620af5c0496ed12058061eec70b",
+      "user_name": null,
+      "thread_id": null,
+      "chat_topic": null,
+      "user_id_alt": "on_487ebc0820ae926542f828b3b2092a7a"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	worktree = /root/.hermes/profiles/tencent-channel-june
+[user]
+	email = hermes@local
+	name = Hermes Checkpoint

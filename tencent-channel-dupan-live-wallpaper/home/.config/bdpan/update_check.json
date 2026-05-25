@@ -1,0 +1,15 @@
+{
+  "Version": "v3.8.1",
+  "URL": "https://issuecdn.baidupcs.com/issue/netdisk/ai-bdpan/linux/3.8.1/bdpan-3.8.1-linux-amd64.tar.gz",
+  "Downloads": {
+    "darwin-amd64": "https://issuecdn.baidupcs.com/issue/netdisk/ai-bdpan/mac-intel/3.8.1/bdpan-3.8.1-darwin-amd64.tar.gz",
+    "darwin-arm64": "https://issuecdn.baidupcs.com/issue/netdisk/ai-bdpan/mac-arm/3.8.1/bdpan-3.8.1-darwin-arm64.tar.gz",
+    "linux-amd64": "https://issuecdn.baidupcs.com/issue/netdisk/ai-bdpan/linux/3.8.1/bdpan-3.8.1-linux-amd64.tar.gz",
+    "linux-arm64": "https://issuecdn.baidupcs.com/issue/netdisk/ai-bdpan/linux-arm/3.8.1/bdpan-3.8.1-linux-arm64.tar.gz",
+    "windows-amd64": "https://issuecdn.baidupcs.com/issue/netdisk/ai-bdpan/win/3.8.1/bdpan-3.8.1-windows-amd64.zip"
+  },
+  "Checksum": "",
+  "DownloadURL": "",
+  "Platform": "",
+  "CheckedAt": "2026-05-25T09:11:22.003065967+08:00"
+}

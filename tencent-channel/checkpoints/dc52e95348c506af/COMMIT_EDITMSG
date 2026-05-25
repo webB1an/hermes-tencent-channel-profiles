@@ -1,0 +1,1 @@
+before terminal: find /root/.hermes -name "*.yaml" -o -name "*.json" | xargs

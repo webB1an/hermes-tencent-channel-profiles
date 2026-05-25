@@ -1,0 +1,1 @@
+触发词"发动态壁纸" → 执行 python3 /root/.hermes/profiles/tencent-channel-live-wallpaper/scripts/live_wallpaper_post.py（完整流程：下载→发帖→删除，不发日志给用户，直接说结果）

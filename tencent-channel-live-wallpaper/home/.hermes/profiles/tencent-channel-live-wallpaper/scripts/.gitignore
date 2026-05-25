@@ -1,0 +1,13 @@
+# Downloaded wallpaper videos
+downloads/
+
+# Runtime records and manifests
+config/*.json
+
+# Local scratch pages captured while debugging
+*.html
+
+# OS/editor noise
+Thumbs.db
+.DS_Store
+*.log
