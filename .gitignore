@@ -14,11 +14,3 @@ cron/.tick.lock
 *.pdf
 *settings*.json
 !.skills_prompt_snapshot.json
-tencent-channel-cc/scripts
-tencent-channel-cc/skills/tencent-channel
-tencent-channel-june/skills/tencent-channel
-tencent-channel-live-wallpaper/scripts
-tencent-channel-live-wallpaper/skills/tencent-channel
-tencent-channel-dupan-live-wallpaper/home/.hermes/profiles/tencent-channel-live-wallpaper/scripts
-tencent-channel-dupan-live-wallpaper/skills/tencent-channel
-tencent-channel/skills/tencent-channel
