@@ -18,6 +18,7 @@ tencent-channel-cc/sessions
 tencent-channel-dupan-live-wallpaper/sessions
 tencent-channel-june/sessions
 tencent-channel-live-wallpaper/sessions
+tencent-channel-sing/sessions
 tencent-channel-dupan-live-wallpaper/cron/output
 */cron/output
 */state.db
