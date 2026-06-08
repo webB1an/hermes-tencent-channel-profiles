@@ -13,7 +13,7 @@
  *   node .\scripts\download-desktophut-first-page.mjs --dry-run
  */
 
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { mkdir, readFile, writeFile, stat, rename, unlink } from "node:fs/promises";
 import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -27,6 +27,7 @@ const FETCH_RETRY_DELAY_MS = 3000;
 const CURL_CONNECT_TIMEOUT_SECONDS = 60;
 const CURL_REQUEST_TIMEOUT_SECONDS = 300;
 const CURL_PROCESS_TIMEOUT_MS = (CURL_REQUEST_TIMEOUT_SECONDS + 30) * 1000;
+const CURL_DOWNLOAD_TIMEOUT_SECONDS = 1800;
 const CURL_IP_VERSION = "--ipv4";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPT_DIR = path.dirname(SCRIPT_PATH);
@@ -370,16 +371,18 @@ async function downloadFile(videoUrl, title, referer) {
   const { ext, expectedSize } = await getDownloadInfo(videoUrl, referer);
   const base = sanitizeFilename(title);
   const filePath = path.join(OUT_DIR, `${base}${ext}`);
+  const partPath = `${filePath}.part`;
 
   try {
     const existing = await stat(filePath);
-    if (!expectedSize || existing.size === expectedSize) {
+    if (expectedSize && existing.size === expectedSize) {
       return { filePath, size: existing.size, expectedSize, skipped: true };
     }
   } catch {
     // File does not exist yet; download it below.
   }
 
+  await unlink(partPath).catch(() => {});
   await runCurl([
     "-fL",
     "--retry",
@@ -387,6 +390,10 @@ async function downloadFile(videoUrl, title, referer) {
     "--retry-delay",
     "2",
     "--retry-all-errors",
+    "--connect-timeout",
+    String(CURL_CONNECT_TIMEOUT_SECONDS),
+    "--max-time",
+    String(CURL_DOWNLOAD_TIMEOUT_SECONDS),
     CURL_IP_VERSION,
     "-C",
     "-",
@@ -395,11 +402,18 @@ async function downloadFile(videoUrl, title, referer) {
     "-e",
     referer,
     "-o",
-    filePath,
+    partPath,
     videoUrl,
   ]);
 
-  const size = (await stat(filePath)).size;
+  const size = (await stat(partPath)).size;
+  if (expectedSize && size !== expectedSize) {
+    throw new Error(`download size mismatch: expected ${expectedSize}, got ${size}`);
+  }
+  if (size <= 0) {
+    throw new Error("download produced an empty file");
+  }
+  await rename(partPath, filePath);
   return { filePath, size, expectedSize, skipped: false };
 }
 

@@ -8,6 +8,15 @@ credential_pool_strategies: {}
 toolsets:
 - hermes-cli
 agent:
+  system_prompt: |
+    tencent-channel-cc 发帖成功通知规则：
+    当用户通过飞书发来抖音/小红书/快手链接并调用 mengde_video_poster.py 成功后，飞书详细通知由脚本直接发送，不再由 agent 改写或组装。脚本发送的固定通知块格式为：
+    发帖完成
+    账号：<账号名>
+    频道：<频道名>
+    帖子链接：<pd.qq.com 链接>
+    agent 最终回复只允许输出：发帖成功
+    不要改写成“✅ 已发至…”，不要省略账号，不要添加标题、表格、说明、总结或额外文字。
   max_turns: 90
   gateway_timeout: 1800
   restart_drain_timeout: 60

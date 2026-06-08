@@ -18,15 +18,15 @@
       "schedule_display": "*/5 * * * *",
       "repeat": {
         "times": 9999,
-        "completed": 628
+        "completed": 1400
       },
-      "enabled": true,
-      "state": "scheduled",
-      "paused_at": null,
-      "paused_reason": null,
+      "enabled": false,
+      "state": "paused",
+      "paused_at": "2026-05-28T09:21:00+08:00",
+      "paused_reason": "manual command now uses bdpan_wallpaper_post.py once; disable watcher to enforce one command = one post",
       "created_at": "2026-05-23T11:29:42.961507+08:00",
-      "next_run_at": "2026-05-25T16:05:00+08:00",
-      "last_run_at": "2026-05-25T16:00:31.614910+08:00",
+      "next_run_at": "2026-05-28T09:25:00+08:00",
+      "last_run_at": "2026-05-28T09:20:42.125246+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -34,5 +34,5 @@
       "origin": null
     }
   ],
-  "updated_at": "2026-05-25T16:00:31.615433+08:00"
+  "updated_at": "2026-05-28T09:21:00+08:00"
 }

@@ -202,7 +202,7 @@ command_allowlist:
 quick_commands:
   发百度网盘动态壁纸:
     type: exec
-    command: nohup python3 /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/scripts/bdpan_wallpaper_post.py download >> /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/logs/bdpan_wallpaper_post.log 2>&1 & echo "已触发动态壁纸下载，下载完成后 watcher 会自动发帖。"
+    command: setsid -f python3 /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/scripts/bdpan_wallpaper_post.py once >> /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/logs/bdpan_wallpaper_post.log 2>&1; echo "已触发一次百度网盘动态壁纸发帖；本次只会发布 1 条帖子。"
 personalities: {}
 security:
   redact_secrets: true

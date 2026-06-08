@@ -48,7 +48,7 @@
  *   config\downloaded-detail-urls.json       长期 URL 去重记录。
  */
 
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { mkdir, readFile, writeFile, stat, rename, unlink } from "node:fs/promises";
 import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -60,6 +60,7 @@ const USER_AGENT =
 const FETCH_RETRIES = 5;
 const FETCH_RETRY_DELAY_MS = 3000;
 const CURL_TEXT_TIMEOUT_MS = 120000;
+const CURL_DOWNLOAD_TIMEOUT_SECONDS = 1800;
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPT_DIR = path.dirname(SCRIPT_PATH);
 const PROJECT_DIR = path.dirname(SCRIPT_DIR);
@@ -401,14 +402,17 @@ async function downloadFile(token, title, index) {
   const { ext, expectedSize } = await getDownloadInfo(token);
   const base = sanitizeFilename(title);
   const filePath = path.join(OUT_DIR, `${base}${ext}`);
+  const partPath = `${filePath}.part`;
   try {
     const existing = await stat(filePath);
-    if (!expectedSize || existing.size === expectedSize) {
-      return { filePath, size: existing.size, skipped: true };
+    if (expectedSize && existing.size === expectedSize) {
+      return { filePath, size: existing.size, expectedSize, skipped: true };
     }
   } catch {
     // File does not exist yet; download it below.
   }
+
+  await unlink(partPath).catch(() => {});
   await runCurl([
     "-fL",
     "--retry",
@@ -416,6 +420,10 @@ async function downloadFile(token, title, index) {
     "--retry-delay",
     "2",
     "--retry-all-errors",
+    "--connect-timeout",
+    "60",
+    "--max-time",
+    String(CURL_DOWNLOAD_TIMEOUT_SECONDS),
     "-C",
     "-",
     "-A",
@@ -423,11 +431,18 @@ async function downloadFile(token, title, index) {
     "-e",
     ROOT,
     "-o",
-    filePath,
+    partPath,
     url,
   ]);
-  const size = (await stat(filePath)).size;
-  return { filePath, size, skipped: false };
+  const size = (await stat(partPath)).size;
+  if (expectedSize && size !== expectedSize) {
+    throw new Error(`download size mismatch: expected ${expectedSize}, got ${size}`);
+  }
+  if (size <= 0) {
+    throw new Error("download produced an empty file");
+  }
+  await rename(partPath, filePath);
+  return { filePath, size, expectedSize, skipped: false };
 }
 
 await mkdir(OUT_DIR, { recursive: true });

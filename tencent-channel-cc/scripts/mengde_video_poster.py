@@ -19,22 +19,31 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import random
 import re
 import subprocess
 import sys
 import tempfile
+import uuid
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 # ============================================================================
 # 配置
 # ============================================================================
 
 SCRIPTS_DIR = Path(__file__).parent
+BASE_DIR = SCRIPTS_DIR.parent
 DOUYIN_SCRIPT = SCRIPTS_DIR / "remove-short-videos-watermark" / "douyin.py"
 XHS_SCRIPT = SCRIPTS_DIR / "remove-short-videos-watermark" / "xiaohongshu.py"
 KUAISHOU_SCRIPT = SCRIPTS_DIR / "remove-short-videos-watermark" / "kuaishou.py"
+QQCLI_ENV_FILE = BASE_DIR / "home" / ".qqcli" / ".env"
+ACCOUNT_TOKENS_FILE = BASE_DIR / "home" / ".qqcli" / "account_tokens.json"
+PROFILE_ENV_FILE = BASE_DIR / ".env"
+ACCOUNT_HOMES_DIR = BASE_DIR / "home" / ".qqcli" / "account_homes"
 
 # 频道主频道池（id, 名称）
 OWNER_GUILDS = [
@@ -46,6 +55,181 @@ OWNER_GUILDS = [
 ]
 
 STATE_FILE = Path(tempfile.gettempdir()) / "mengde_round_robin.json"
+ACCOUNT_STATE_FILE = Path(tempfile.gettempdir()) / "mengde_account_round_robin.json"
+
+
+# ============================================================================
+# Profile 环境变量
+# ============================================================================
+
+def load_env_file(path: Path) -> dict[str, str]:
+    env: dict[str, str] = {}
+    if not path.exists():
+        return env
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        env[key.strip()] = value.strip().strip("'\"")
+    return env
+
+
+def profile_env() -> dict[str, str]:
+    return {**load_env_file(PROFILE_ENV_FILE), **os.environ}
+
+
+# ============================================================================
+# 账号轮询状态管理
+# ============================================================================
+
+def read_default_token() -> str:
+    """读取 tencent-channel-cc 当前默认账号 token"""
+    if not QQCLI_ENV_FILE.exists():
+        return ""
+    for raw in QQCLI_ENV_FILE.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key.strip() == "QQ_AI_CONNECT_TOKEN":
+            return value.strip().strip("'\"")
+    return ""
+
+
+def unique_account_name(name: str, used: set[str]) -> str:
+    base = name.strip() or "account"
+    candidate = base
+    i = 2
+    while candidate in used:
+        candidate = f"{base}-{i}"
+        i += 1
+    used.add(candidate)
+    return candidate
+
+
+def normalize_extra_accounts(raw: object) -> list[dict[str, str]]:
+    """支持 {"accounts": [...]} 或直接 [...] 两种 token 池格式"""
+    if isinstance(raw, dict):
+        raw_accounts = raw.get("accounts", [])
+    else:
+        raw_accounts = raw
+    if not isinstance(raw_accounts, list):
+        return []
+
+    accounts: list[dict[str, str]] = []
+    for idx, item in enumerate(raw_accounts, start=1):
+        if isinstance(item, str):
+            token = item.strip()
+            name = f"extra-{idx}"
+        elif isinstance(item, dict):
+            token = str(item.get("token", "")).strip()
+            name = str(item.get("name") or f"extra-{idx}").strip()
+        else:
+            continue
+        if token:
+            accounts.append({"name": name, "token": token})
+    return accounts
+
+
+def load_accounts() -> list[dict[str, str]]:
+    """加载默认账号 + 可选额外 token 池"""
+    accounts: list[dict[str, str]] = []
+    used_names: set[str] = set()
+    seen_tokens: set[str] = set()
+
+    default_token = read_default_token()
+    if default_token:
+        accounts.append({
+            "name": unique_account_name("怪异星人", used_names),
+            "token": default_token,
+        })
+        seen_tokens.add(default_token)
+
+    if ACCOUNT_TOKENS_FILE.exists():
+        try:
+            raw = json.loads(ACCOUNT_TOKENS_FILE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"账号 token 池 JSON 格式错误：{ACCOUNT_TOKENS_FILE} ({exc})") from exc
+        for account in normalize_extra_accounts(raw):
+            token = account["token"]
+            if token in seen_tokens:
+                continue
+            accounts.append({
+                "name": unique_account_name(account["name"], used_names),
+                "token": token,
+            })
+            seen_tokens.add(token)
+
+    if not accounts:
+        raise RuntimeError(f"未找到腾讯频道账号 token，请检查 {QQCLI_ENV_FILE}")
+    return accounts
+
+
+def save_account_pool(pool: list[str], last: str = "") -> None:
+    data = {"pool": pool, "last": last}
+    ACCOUNT_STATE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def load_account_state(accounts: list[dict[str, str]]) -> tuple[list[str], str]:
+    valid_names = {account["name"] for account in accounts}
+    last = ""
+    if ACCOUNT_STATE_FILE.exists():
+        try:
+            data = json.loads(ACCOUNT_STATE_FILE.read_text(encoding="utf-8"))
+            last = data.get("last", "") if data.get("last") in valid_names else ""
+            pool = [name for name in data.get("pool", []) if name in valid_names]
+            if pool:
+                return pool, last
+        except Exception:
+            pass
+
+    pool = [account["name"] for account in accounts]
+    random.shuffle(pool)
+    if last and len(pool) > 1 and pool[0] == last:
+        pool.append(pool.pop(0))
+    save_account_pool(pool, last)
+    return pool, last
+
+
+def select_account() -> dict[str, str]:
+    accounts = load_accounts()
+    by_name = {account["name"]: account for account in accounts}
+    pool, _ = load_account_state(accounts)
+    name = pool[0]
+    return by_name[name]
+
+
+def mark_account_used(account_name: str) -> None:
+    accounts = load_accounts()
+    pool, _ = load_account_state(accounts)
+    pool = [name for name in pool if name != account_name]
+    save_account_pool(pool, account_name)
+
+
+def safe_account_dir_name(name: str) -> str:
+    value = re.sub(r"[^0-9A-Za-z_.-]+", "_", name.strip())
+    value = value.strip("._") or "account"
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:10]
+    return f"{value}-{digest}"
+
+
+def account_home(account: dict[str, str]) -> Path:
+    home = ACCOUNT_HOMES_DIR / safe_account_dir_name(account["name"])
+    qqcli_dir = home / ".qqcli"
+    qqcli_dir.mkdir(parents=True, exist_ok=True)
+    env_file = qqcli_dir / ".env"
+    env_file.write_text(f"QQ_AI_CONNECT_TOKEN={account['token']}\n", encoding="utf-8")
+    env_file.chmod(0o600)
+    return home
+
+
+def cli_env(account: dict[str, str]) -> dict[str, str]:
+    env = os.environ.copy()
+    env["HERMES_HOME"] = str(BASE_DIR)
+    env["HOME"] = str(account_home(account))
+    env["QQ_AI_CONNECT_TOKEN"] = account["token"]
+    return env
 
 
 # ============================================================================
@@ -73,13 +257,6 @@ def save_pool(pool: list[tuple[str, str]]) -> None:
     """持久化轮询池"""
     data = {"pool": [{"id": g[0], "name": g[1]} for g in pool]}
     STATE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
-
-
-def remove_from_pool(guild_id: str) -> None:
-    """从池中移除指定频道并保存"""
-    pool = load_pool()
-    pool = [g for g in pool if g[0] != guild_id]
-    save_pool(pool)
 
 
 def remove_from_pool(guild_id: str) -> None:
@@ -163,7 +340,14 @@ def download_video(platform: Platform, share_text: str, output_dir: Path) -> Pat
 # 腾讯频道发帖
 # ============================================================================
 
-def post_video_to_channel(guild_id: str, channel_id: str, video_path: Path, content: str = "") -> None:
+def post_video_to_channel(
+    guild_id: str,
+    channel_id: str,
+    video_path: Path,
+    content: str = "",
+    *,
+    account: dict[str, str],
+) -> str:
     """将本地视频发布到指定频道"""
     cmd = [
         "tencent-channel-cli",
@@ -177,6 +361,7 @@ def post_video_to_channel(guild_id: str, channel_id: str, video_path: Path, cont
         cmd,
         capture_output=True,
         text=True,
+        env=cli_env(account),
         check=False,
     )
     if result.returncode != 0:
@@ -186,12 +371,14 @@ def post_video_to_channel(guild_id: str, channel_id: str, video_path: Path, cont
     data = json.loads(result.stdout)
     if data.get("success"):
         share_url = data.get("data", {}).get("share_url", "")
-        print(f"发帖成功：{share_url}")
+        if not share_url:
+            raise RuntimeError(f"发帖成功但未返回帖子链接：{data}")
+        return share_url
     else:
         raise RuntimeError(f"发帖失败：retCode={data.get('retCode')}, msg={data.get('msg', '未知错误')}")
 
 
-def get_channel_id_for_guild(guild_id: str) -> str:
+def get_channel_id_for_guild(guild_id: str, *, account: dict[str, str]) -> str:
     """获取频道的"全部"版块 channel_id"""
     cmd = [
         "tencent-channel-cli",
@@ -199,7 +386,7 @@ def get_channel_id_for_guild(guild_id: str) -> str:
         "--guild-id", guild_id,
         "-j",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=cli_env(account), check=False)
     if result.returncode != 0:
         # fallback
         return "1"
@@ -215,6 +402,73 @@ def get_channel_id_for_guild(guild_id: str) -> str:
     except Exception:
         pass
     return "1"
+
+
+# ============================================================================
+# 飞书通知
+# ============================================================================
+
+class FeishuNotifier:
+    """通过飞书开放平台 API 发送发帖完成通知"""
+
+    def __init__(self, env: dict[str, str], *, enabled: bool = True) -> None:
+        self.app_id = env.get("FEISHU_APP_ID", "")
+        self.app_secret = env.get("FEISHU_APP_SECRET", "")
+        self.domain = env.get("FEISHU_DOMAIN", "feishu")
+        self.user_id = env.get("FEISHU_USER_ID", "")
+        self.chat_id = env.get("FEISHU_NOTIFY_CHAT_ID", "")
+        self.enabled = enabled
+
+    def _base_url(self) -> str:
+        if self.domain.lower() == "lark":
+            return "https://open.larksuite.com"
+        return "https://open.feishu.cn"
+
+    def is_enabled(self) -> bool:
+        return bool(self.enabled and self.app_id and self.app_secret and (self.user_id or self.chat_id))
+
+    def _post_json(self, url: str, payload: dict, headers: dict[str, str] | None = None) -> dict:
+        req = Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                **(headers or {}),
+            },
+            method="POST",
+        )
+        with urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def _tenant_access_token(self) -> str:
+        data = self._post_json(
+            f"{self._base_url()}/open-apis/auth/v3/tenant_access_token/internal",
+            {"app_id": self.app_id, "app_secret": self.app_secret},
+        )
+        if data.get("code") != 0 or not data.get("tenant_access_token"):
+            raise RuntimeError(f"tenant token failed: {data}")
+        return str(data["tenant_access_token"])
+
+    def send(self, text: str) -> None:
+        if not self.is_enabled():
+            print("飞书通知未启用，跳过")
+            return
+        token = self._tenant_access_token()
+        receive_id_type = "open_id" if self.user_id else "chat_id"
+        receive_id = self.user_id or self.chat_id
+        data = self._post_json(
+            f"{self._base_url()}/open-apis/im/v1/messages?receive_id_type={receive_id_type}",
+            {
+                "receive_id": receive_id,
+                "msg_type": "text",
+                "content": json.dumps({"text": text[:3800]}, ensure_ascii=False),
+                "uuid": str(uuid.uuid4()),
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if data.get("code") != 0:
+            raise RuntimeError(f"message send failed: {data}")
+        print("飞书通知已发送")
 
 
 # ============================================================================
@@ -252,7 +506,10 @@ def process(share_text: str) -> None:
             if any(k in name_lower for k in ("douyin", "dy", "xiaohongshu", "xhs", "kuaishou", "ks")):
                 content = ""
 
-        # 3. 自动从池中选一个频道（随机轮询）
+        # 3. 自动从账号池和频道池各选一个（随机轮询）
+        account = select_account()
+        print(f"随机选择账号：{account['name']}")
+
         pool = load_pool()
         if not pool:
             pool = list(OWNER_GUILDS)
@@ -260,13 +517,28 @@ def process(share_text: str) -> None:
             save_pool(pool)
         guild_id, guild_name_selected = pool[0]
         print(f"随机选择频道：{guild_name_selected}（池内共{len(pool)}个）")
-        remove_from_pool(guild_id)
 
         # 4. 发帖
-        channel_id = get_channel_id_for_guild(guild_id)
+        channel_id = get_channel_id_for_guild(guild_id, account=account)
         print(f"目标频道：{guild_name_selected}（guild_id={guild_id}，channel_id={channel_id}）")
         print(f"发帖文案：'{content}'" if content else "发帖文案：（纯视频）")
-        post_video_to_channel(guild_id, channel_id, persistent_path, content)
+        share_url = post_video_to_channel(guild_id, channel_id, persistent_path, content, account=account)
+        mark_account_used(account["name"])
+        remove_from_pool(guild_id)
+        print("发帖完成")
+        print(f"账号：{account['name']}")
+        print(f"频道：{guild_name_selected}")
+        print(f"帖子链接：{share_url}")
+        notice = (
+            "发帖完成\n"
+            f"账号：{account['name']}\n"
+            f"频道：{guild_name_selected}\n"
+            f"帖子链接：{share_url}"
+        )
+        try:
+            FeishuNotifier(profile_env()).send(notice)
+        except Exception as exc:
+            print(f"飞书通知失败（不影响发帖结果）：{exc}", file=sys.stderr)
 
     finally:
         if persistent_path:

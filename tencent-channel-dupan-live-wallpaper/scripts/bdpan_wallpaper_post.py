@@ -792,33 +792,27 @@ class BdpanWallpaperPoster:
             LOG.info("下载完成，进入等待队列: %s", local_path.name)
             return 0
 
-    def run_watch(self) -> int:
-        """
-        定时扫描下载目录，有 mp4 就发帖。
-        流程：扫描 → 有文件 → 发帖 → 删文件 → mark_posted → 再扫描
-        永远不主动退出（定时任务每次调用只扫一次，cron 控制频率）
-        """
-        now = cst_now()
-        LOG.info("===== Watcher @ %s =====", now.strftime("%Y-%m-%d %H:%M:%S"))
-
-        # 清理超时的 pending 项
-        self._cleanup_stale_pending(max_age_seconds=3600)
-
-        files = self._scan_download_dir()
-        if not files:
-            LOG.info("下载目录暂无 mp4，等待下载完成...")
-            return 0
-
+    def _publish_files(
+        self,
+        files: list[Path],
+        *,
+        enforce_cooldown: bool,
+        max_posts: int = 1,
+    ) -> int:
         # 检查 pending 队列，按顺序处理
         pending = self.store.get_pending()
         LOG.info("待处理 %d 个下载任务，%d 个本地 mp4 文件", len(pending), len(files))
 
         # 发帖冷却期检查
-        if not self.store.can_post_now():
+        if enforce_cooldown and not self.store.can_post_now():
             LOG.info("发帖冷却期中，跳过本次扫描")
             return 0
 
+        posted_count = 0
         for local_path in files:
+            if posted_count >= max_posts:
+                break
+
             # 优先用唯一 local_filename 匹配；兼容旧 pending 再回退到 server_filename。
             pending_item = next(
                 (
@@ -883,7 +877,47 @@ class BdpanWallpaperPoster:
             if self.notifier:
                 self.notifier.send(display_filename, feed_id or "", share_url or "")
 
+            posted_count += 1
+
+        if posted_count == 0:
+            LOG.info("本次没有成功发布任何壁纸")
+            return 4
         return 0
+
+    def run_watch(self) -> int:
+        """
+        定时扫描下载目录，有 mp4 就发 1 帖。
+        流程：扫描 → 有文件 → 发帖 → 删文件 → mark_posted → 退出
+        """
+        now = cst_now()
+        LOG.info("===== Watcher @ %s =====", now.strftime("%Y-%m-%d %H:%M:%S"))
+
+        # 清理超时的 pending 项
+        self._cleanup_stale_pending(max_age_seconds=3600)
+
+        files = self._scan_download_dir()
+        if not files:
+            LOG.info("下载目录暂无 mp4，等待下载完成...")
+            return 0
+
+        return self._publish_files(files, enforce_cooldown=True, max_posts=1)
+
+    def run_once(self) -> int:
+        """
+        手动触发模式：下载 1 个未发帖 mp4，立刻发布 1 帖，然后退出。
+        不依赖 watcher/cron，保证一次命令最多产生一条帖子。
+        """
+        before_files = {p.name for p in self._scan_download_dir()}
+        rc = self.run_download()
+        if rc != 0:
+            return rc
+
+        files = [p for p in self._scan_download_dir() if p.name not in before_files]
+        if not files:
+            LOG.error("下载完成后未找到新的 mp4 文件，未执行发帖")
+            return 4
+
+        return self._publish_files(files, enforce_cooldown=False, max_posts=1)
 
 
 # =========================================================================
@@ -906,8 +940,10 @@ def parse_args(argv=None):
     dl.add_argument("-v", "--verbose", action="store_true", help="打印 DEBUG 级日志")
     watch = sub.add_parser("watch", help="扫描下载目录，有 mp4 就发帖（供定时任务调用）")
     watch.add_argument("-v", "--verbose", action="store_true", help="打印 DEBUG 级日志")
-    # 兼容旧行为：无子命令时默认 download
-    p.set_defaults(cmd="download")
+    once = sub.add_parser("once", help="下载一个 mp4，发布一帖，然后退出（手动触发用）")
+    once.add_argument("-v", "--verbose", action="store_true", help="打印 DEBUG 级日志")
+    # 兼容旧行为：无子命令时默认一次完整发帖
+    p.set_defaults(cmd="once", verbose=False)
     return p.parse_args(argv)
 
 
@@ -924,8 +960,9 @@ def main(argv=None) -> int:
     try:
         if args.cmd == "watch":
             return poster.run_watch()
-        else:
+        if args.cmd == "download":
             return poster.run_download()
+        return poster.run_once()
     except KeyboardInterrupt:
         LOG.warning("用户中断")
         return 130

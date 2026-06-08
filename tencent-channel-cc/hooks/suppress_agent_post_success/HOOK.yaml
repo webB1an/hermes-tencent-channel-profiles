@@ -1,0 +1,4 @@
+name: suppress-agent-post-success
+description: Suppress agent-generated Tencent Channel post success replies; script sends the Feishu notice directly.
+events:
+  - gateway:startup

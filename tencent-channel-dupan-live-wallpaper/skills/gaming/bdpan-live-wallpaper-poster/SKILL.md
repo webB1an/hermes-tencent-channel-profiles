@@ -211,6 +211,10 @@ for f in feeds:
 
 2. **进程被 kill 后 pending 保留，下次 cron 重跑同一个文件**：download 进程被 kill 后，`pending_downloads` 里仍有该文件记录，`iter_mp4_newest_first` 会跳过它，下一次 cron download 会重选同一个。这是**预期行为**，不是 bug。bdpan 不支持断点续传，所以会重新从头下。
 
+2b. **Stale lock 导致脚本直接退出（无声静默失败）**：若进程被 SIGKILL，`/tmp/bdpan_wallpaper_post.lock` 残留且指向已死亡的 PID。下次调用 `bdpan_wallpaper_post.py` 时 `fcntl.flock` 成功获取锁（因为 PID 已死，内核已释放），但 fcntl 在 flock 时发现文件存在就报错退出。症状：cron 每5分钟触发，但日志完全无输出——脚本在进程锁检查时直接退出，返回码 0。诊断：`ls -la /tmp/bdpan_wallpaper_post.lock` + `fuser /tmp/bdpan_wallpaper_post.lock` 查是否有过期 PID。处理：`rm -f /tmp/bdpan_wallpaper_post.lock`。
+
+2c. **duplicate 脚本在另一个 profile**：`bdpan_wallpaper_post.py` 存在于 `tencent-channel-live-wallpaper/scripts/`（旧副本，无 cron）和 `tencent-channel-dupan-live-wallpaper/scripts/`（当前使用的）。不要混淆。
+
 3. **done 写在下载后导致文件遗漏（旧版 bug，已修复）**：旧版 `add_pending` 在下载**成功后才写入**，若进程在下载完成后、写入 pending 前被 kill，该文件在网盘上未标记，下次 cron 又会选中同一个，造成重复下载。Plan B 把 `add_pending` 改到下载**前**，彻底解决这个问题。
 
 4. **bdpan download 不能传绝对路径**：必须传相对路径（去掉 `/apps/bdpan/` 前缀）。直接传 `/apps/bdpan/动态壁纸/xxx.mp4` 会触发"路径穿越攻击被阻止"错误。正确用法：`bdpan download "动态壁纸/xxx.mp4" /tmp/xxx.mp4`
@@ -233,9 +237,187 @@ for f in feeds:
 
 12. **pending 文件无存活上限导致堆积**：若 download 因 login 失效而失败，pending 中的文件永远不会被清理，`iter_mp4_newest_first` 每次都跳过它。**已修复**：pending 加 `pending_at` 字段，1小时超时自动清理（`_cleanup_stale_pending(max_age_seconds=3600)` 在 `run_download`/`run_watch` 开头调用）。
 
-13. **发帖无冷却期导致刷屏**：旧版无 `last_posted_at` 记录，watch 每5分钟扫描到文件就发帖。**已修复**：30分钟冷却期（`POST_COOLDOWN_SECONDS = 1800`），`can_post_now()` 检查通过才发，`record_post()` 记录时间。
+14. **锁文件残留诊断流程**：
+```bash
+# 1. 检查锁文件是否残留
+ls -la /tmp/bdpan_wallpaper_post.lock
 
-14. **登录失效无告警**：search 返回空时没有告警通知，用户不知道 login 已失效。**已修复**：新增 `FeishuNotifier.alert(title, message)` 方法，`run_download()` 检测到 ls 返回空时发送飞书告警。
+# 2. 查看锁文件指向的PID（fuser 即使进程已死也会显示）
+fuser /tmp/bdpan_wallpaper_post.lock
+
+# 3. 检查该PID是否存活
+ps aux | grep PID
+
+# 4. 查看哪些进程持有文件锁（/proc/locks 更权威）
+cat /proc/locks | grep bdpan_wallpaper
+
+# 5. 找到持有锁的进程的文件描述符
+ls -la /proc/<PID>/fd/ | grep lock
+
+# 6. 清理并重跑
+rm -f /tmp/bdpan_wallpaper_post.lock
+python3 scripts/bdpan_wallpaper_post.py watch
+```
+
+15. **bdpan login 过期时的精确诊断**：执行 `bdpan whoami` 返回"⚠ 未登录"表示 cookie/token 已过期，需要重新 `bdpan login`。此时 `bdpan search` 和 `bdpan ls` 都会返回 `{"code": 1, "error": "请先执行 bdpan login 命令"}`。登录失效不会触发脚本报错，只会导致 search 返回空，cron 空转。
+
+### Hermes cron 是 LLM 驱动的（关键发现 2026-05-27）
+cron scheduler 不是直接跑 subprocess，而是把 prompt 发给 `AIAgent`，LLM 有完全的自主决策权。这意味着：
+- 同一个 cron prompt，每次运行结果可能不同（取决于 LLM 当次决策）
+- LLM 可能在 watch 模式下**自主决定**切换到 `download` 子命令（当下载目录为空时）
+- 安全审批（`tirith:pipe_to_interpreter`）可能随机拦截某些 LLM 行动，导致同一 cron session 有的能下载有的不能
+
+### 两次发帖的触发机制
+- **白天（19:50）**：独立后台进程（`python3 ... download`，PID 1710201）在 19:43 启动，cron watch 在 19:50 检测到下载完成并发帖。独立进程的来源可能是：手动触发、systemd service、或其他 cron job。
+- **个性380（21:32）**：cron session (21:30:30) 的 LLM 自主从 watch 切换到 download → bdpan search → 下载 → 发帖。20:30 同类型的 session 曾被安全审批拦截，没有触发 download。
+
+### 防止重复发帖的方法
+当前系统的 watch-only cron **不能保证只发一张**。如需严格控制：
+1. 方案A：在脚本 `run_watch` 里加 guard，当 `pending_downloads` 为空时直接退出，禁止触发 download
+2. 方案B：cron prompt 明确写 "只执行 watch，不调用 download 子命令，不要主动搜索网盘"
+3. 方案C：分离 watch 和 download 为两个独立 cron job，download cron 触发后自动 disable 下一轮
+
+## ⚠️ 关键警告：Hermes Cron 是 LLM 自主执行，不是直接 subprocess 调用
+
+**发现于 2026-05-27**：当你配置 cron job prompt 为 `python3 .../bdpan_wallpaper_post.py watch`，Hermes 的调度器**不是直接调用 subprocess** 执行这条命令，而是：
+1. 启动一个新的 LLM Agent 会话（MiniMax-M2.7）
+2. 把这条 prompt 作为 user message 发给 LLM
+3. **由 LLM 自主决定怎么执行**（包括它可以自行判断并切换子命令）
+
+**实际影响**：当 LLM 收到 `python3 ... watch` 指令时，如果它发现：
+- 下载目录为空
+- `posted_detail_urls` 里显示有个性380未发帖
+- 它会去读 `bdpan_wallpaper_post.py` 的代码逻辑
+
+LLM 看到空目录+有 pending 的未发帖文件 → 自行决定从 `watch` 切换到 `download` 子命令 → 执行下载 → 发帖。
+
+**这意味着**：
+- watch cron 严格来说**不保证只 watch 不下载** — LLM 有自主决策权
+- 两个 cron session 的 LLM 可能行为不同（有的更激进，有的更保守）
+- 21:30 的 cron session 执行了完整 download→watch 流程，但 21:20、21:26 没有（不同 LLM 实例的决策不同）
+
+**正确的架构理解**：
+- `watch` cron job 的 prompt 传入后，LLM 看到空目录会自己决定切 download
+- 这其实是合理行为，但可能不符合"只监控已下载文件"的预期
+
+**如需严格区分 watch/download 为两个独立 cron job**，需要：
+- 两个独立 job，prompt 明确说"只执行 watch，不要执行 download"
+- 或者修改代码逻辑，让 watch 子命令不包含 download 的代码路径
+
+## 调试技巧：查 cron 执行历史（SQLite）
+
+cron 每次运行都会在 `state.db` 的 `sessions` 和 `messages` 表留下完整记录：
+
+```python
+import sqlite3
+db = '/root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/state.db'
+conn = sqlite3.connect(db)
+cur = conn.cursor()
+
+# 找到某天的 watch cron sessions
+cur.execute("""
+    SELECT id, started_at, ended_at, message_count 
+    FROM sessions 
+    WHERE source='cron' AND id LIKE '%31b23f845072%20260527%'
+    ORDER BY started_at
+""")
+for row in cur.fetchall():
+    print(row)
+
+# 查看某个 session 的完整消息链
+cur.execute("""
+    SELECT id, role, substr(content, 1, 300), tool_name 
+    FROM messages 
+    WHERE session_id='cron_31b23f845072_20260527_213030'
+    ORDER BY id
+""")
+for row in cur.fetchall():
+    print(f'ID={row[0]} role={row[1]} tool={row[3]}')
+    print(f'  {repr(row[2][:300])}')
+
+conn.close()
+```
+
+**调查过程**：
+1. 发现某次 cron（21:32）发了个性380 → 查 `cron_31b23f845072_20260527_213030` session
+2. 工具调用链显示：LLM 先跑 `watch`（空目录）→ 自行决定切 `download` → 下载 → 再跑 `watch` → 发帖
+3. 全程由 LLM 自主决策，不是 cron 直接调 subprocess
+
+## 当前问题：bdpan login 已过期
+
+```bash
+HOME=/root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/home \
+  /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/home/.local/bin/bdpan whoami
+# 返回：⚠ 未登录
+```
+
+需要重新 `bdpan login` 才能恢复下载功能。
+
+## ⚠️ 关键警告：下载与发帖调度必须同时配置（发现于 2026-05-25）
+
+```bash
+# jobs.json 中的 watch job（id: 31b23f845072）
+# schedule: */5 * * * *
+# prompt: python3 .../bdpan_wallpaper_post.py watch
+```
+
+⚠️ 注意：`hermes cron list` 的输出**不包含** id `31b23f845072`（显示过滤问题），但 jobs.json 中确实存在。
+
+## ⚠️ 关键警告：下载与发帖调度必须同时配置（发现于 2026-05-25）
+
+**当前问题（此 profile 独有）**：只有 `watch` cron job，没有 `download` cron job。
+
+- `watch` 每5分钟扫描 `bdpan-downloads/` 找 `.mp4` 文件来发帖
+- `download` **必须手动触发**（或由其他机制触发），否则新壁纸永远不会从网盘拉下来
+- 结果：watch 每次都报"下载目录暂无 mp4"，一直在空转
+
+**症状**：cron output 显示每次都是"下载目录暂无 mp4，等待下载完成..."，pending 始终为空，没有任何发帖动作。
+
+**诊断**：
+```bash
+# 确认 download 有没有被 cron 调度
+cat /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/cron/jobs.json
+
+# 确认下载目录只有 .bdpan 残留（无 .mp4）
+ls -la /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/bdpan-downloads/
+```
+
+**必须修复**：给 `download` 命令也加一个 cron job，建议调度 `*/10 * * * *`（每10分钟），比 watch 稀疏一些，避免下载和发帖速度跟不上。
+
+**补充：.bdpan 文件不是"待发帖"文件**：
+- `watch` 只扫描 `*.mp4`，`*.bdpan` 对它完全不可见
+- 中断的下载留下 `.bdpan` 残留，这些是**孤儿文件**，不会自动重试，不会被 watch 处理
+- 下次 `download` 重跑时会选同一个文件（pending 已标记跳过），但如果 pending 也超时被清理了，会重新选同一个文件从头下（因为 bdpan 不支持断点续传）
+- `.bdpan` 文件的存在**不是 bug，是正常状态**（下载进行中）或**之前被 kill 的遗迹**
+
+**正确配置（两个 cron job）**：
+| Job | Schedule | Command |
+|-----|----------|---------|
+| `bdpan动态壁纸-watcher` | `*/5 * * * *` | `watch` 子命令 |
+| `bdpan动态壁纸-downloader` | `*/10 * * * *` | `download` 子命令 |
+
+**区分 .bdpan 残留的三种状态**：
+```bash
+# 1. 活跃下载中（最近有更新）
+stat 465223581608255_RO姬动态壁纸.mp4.bdpan
+# Access/Modify 应该在最近几分钟内
+
+# 2. 卡住的下载（很久没更新，可能被 kill 了）
+stat 1087917026367720_流萤.mp4.bdpan
+# Modify 显示 2 小时前 → 进程已死，需要手动清理
+
+# 3. 下载完成（已转为 .mp4）
+ls -la bdpan-downloads/*.mp4
+# 有输出 → watch 可以处理
+```
+
+清理卡住下载的方法（先删残留，再重跑 download）：
+```bash
+rm -f /root/.hermes/profiles/tencent-channel-dupan-live-wallpaper/bdpan-downloads/*.bdpan
+# 然后用 background=true 触发 download（避免 180s timeout）
+```
+
+16. **文件名含 `....` 无法下载**：bdpan 对远程路径中含 `....`（连续4个点）的文件直接 server-side 拒绝，错误信息"路径穿越攻击被阻止"，无任何变通方法。代码中在 download() 调用前检测并跳过。
 
 11. **文件名含 `....` 无法下载**：bdpan 对远程路径中含 `....`（连续4个点）的文件直接 server-side 拒绝，错误信息"路径穿越攻击被阻止"，无任何变通方法。代码中在 download() 调用前检测并跳过。
 

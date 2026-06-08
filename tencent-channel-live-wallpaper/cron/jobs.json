@@ -2,8 +2,8 @@
   "jobs": [
     {
       "id": "7b80413a0f34",
-      "name": "tencent-channel 每日媒体清理",
-      "prompt": "执行清理脚本 `/root/.hermes/profiles/tencent-channel-live-wallpaper/scripts/cleanup_media.py`，将输出保存到 `/root/.hermes/profiles/tencent-channel-live-wallpaper/cron/output/cleanup_media_YYYYMMDD.log`。\n\npython /root/.hermes/profiles/tencent-channel-live-wallpaper/scripts/cleanup_media.py",
+      "name": "tencent-channel \u6bcf\u65e5\u5a92\u4f53\u6e05\u7406",
+      "prompt": "\u6267\u884c\u6e05\u7406\u811a\u672c `/root/.hermes/profiles/tencent-channel-live-wallpaper/scripts/cleanup_media.py`\uff0c\u5c06\u8f93\u51fa\u4fdd\u5b58\u5230 `/root/.hermes/profiles/tencent-channel-live-wallpaper/cron/output/cleanup_media_YYYYMMDD.log`\u3002\n\npython /root/.hermes/profiles/tencent-channel-live-wallpaper/scripts/cleanup_media.py",
       "skills": [],
       "skill": null,
       "model": null,
@@ -18,15 +18,15 @@
       "schedule_display": "0 3 * * *",
       "repeat": {
         "times": null,
-        "completed": 38
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-04-17T16:41:19.835071+08:00",
-      "next_run_at": "2026-05-26T03:00:00+08:00",
-      "last_run_at": "2026-05-25T03:00:43.149322+08:00",
+      "next_run_at": "2026-06-09T03:00:00+08:00",
+      "last_run_at": "2026-06-08T03:01:07.714584+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -34,5 +34,5 @@
       "origin": null
     }
   ],
-  "updated_at": "2026-05-25T03:00:43.149808+08:00"
+  "updated_at": "2026-06-08T03:01:07.715030+08:00"
 }

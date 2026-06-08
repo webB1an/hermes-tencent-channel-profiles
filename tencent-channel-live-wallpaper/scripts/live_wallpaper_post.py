@@ -266,7 +266,7 @@ class DownloadedWallpaper:
     name: str           # 英文名（用于翻译）
     detail_url: str     # 详情页 URL（用于去重）
     file_path: Path     # 本地文件路径（发帖后删除）
-    source: str         # "wallpaperwaifu" | "moewalls" | "desktophut"
+    source: str         # "wallpaperwaifu" | "moewalls" | "desktophut" | "motionbgs" | "wallsflow"
 
 
 class DownloadRunner:
@@ -276,6 +276,9 @@ class DownloadRunner:
         ("wallpaperwaifu", "WallpaperWaifu", "download-wallpaperwaifu-first-page.mjs"),
         ("moewalls",       "MoeWalls",       "download-moewalls-first-page.mjs"),
         ("desktophut",     "DesktopHut",     "download-desktophut-first-page.mjs"),
+        ("motionbgs",      "MotionBGs",     "download-motionbgs-first-page.mjs"),
+        ("wallsflow",      "Wallsflow",     "download-wallsflow-first-page.mjs"),
+        ("wallpaperwaves", "WallpaperWaves", "download-wallpaperwaves-first-page.mjs"),
     ]
 
     def __init__(self, base: Path, dry_run: bool = False) -> None:
@@ -336,7 +339,6 @@ class DownloadRunner:
                 capture_output=True,
                 text=True,
                 env=env,
-                timeout=300,
             )
             if proc.returncode != 0:
                 LOG.warning("%s 运行失败 (code=%d): %s",
@@ -346,9 +348,6 @@ class DownloadRunner:
                 if line.strip():
                     LOG.debug("  [node] %s", line)
             return True
-        except subprocess.TimeoutExpired:
-            LOG.warning("%s 运行超时（5分钟）", script_name)
-            return False
         except FileNotFoundError:
             LOG.error("node 未找到，请确认 Node.js 已安装")
             return False
@@ -357,6 +356,9 @@ class DownloadRunner:
         "wallpaperwaifu": "manifest-wallpaperwaifu.json",
         "moewalls":       "manifest.json",
         "desktophut":     "manifest-desktophut.json",
+        "motionbgs":      "manifest-motionbgs.json",
+        "wallsflow":      "manifest-wallsflow.json",
+        "wallpaperwaves": "manifest-wallpaperwaves.json",
     }
 
     def _parse_manifest(self, source_key: str) -> list[DownloadedWallpaper]:
@@ -418,6 +420,9 @@ class DownloadRunner:
             "wallpaperwaifu": "downloaded-wallpaperwaifu-detail-urls.json",
             "moewalls": "downloaded-detail-urls.json",
             "desktophut": "downloaded-desktophut-detail-urls.json",
+            "motionbgs": "downloaded-motionbgs-detail-urls.json",
+            "wallsflow": "downloaded-wallsflow-detail-urls.json",
+            "wallpaperwaves": "downloaded-wallpaperwaves-detail-urls.json",
         }
         filename = url_record_map.get(source_key)
         if not filename:
@@ -470,6 +475,9 @@ class PostedStore:
         "downloaded-detail-urls.json",
         "downloaded-wallpaperwaifu-detail-urls.json",
         "downloaded-desktophut-detail-urls.json",
+        "downloaded-motionbgs-detail-urls.json",
+        "downloaded-wallsflow-detail-urls.json",
+        "downloaded-wallpaperwaves-detail-urls.json",
     ]
 
     def __init__(self, path: Path, download_base: Path) -> None:

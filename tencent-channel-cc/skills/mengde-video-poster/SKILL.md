@@ -13,8 +13,11 @@ version: 3.1.0
 
 **CLI 模式（推荐，直接传参）：**
 ```bash
-python mengde_video_poster.py "抖音分享文案"
+cd /root/.hermes/profiles/tencent-channel-cc
+python scripts/mengde_video_poster.py '分享文案'
 ```
+
+**注意：分享文案必须用单引号包裹**，不能用双引号。快手分享文案常含双引号（如"变装"、"喜爱度激励计划"），bash 会将双引号当作字符串定界符导致 `unexpected EOF` 错误。
 
 **stdin JSON 模式（Cron 用）：**
 ```bash
@@ -28,6 +31,32 @@ proc.communicate(input=json.dumps({"share_text": "抖音分享文案..."}))
 PYEOF
 ```
 或者直接构造 JSON 后 pipe。
+
+## 飞书通知格式（脚本触发）
+
+脚本成功后会在 stdout 输出固定通知块，并由脚本直接调用飞书开放平台 API 发送给 `FEISHU_NOTIFY_CHAT_ID`：
+
+```text
+发帖完成
+账号：<账号名>
+频道：<频道名>
+帖子链接：<pd.qq.com 链接>
+```
+
+当用户通过飞书发来抖音/小红书/快手链接时，运行脚本即可；详细成功通知由脚本发送。脚本成功后，agent 最终回复只输出：
+
+```text
+发帖成功
+```
+
+不要再由 agent 改写成“✅ 已发至…”，也不要手动组装第二条详细成功通知。
+
+## 账号轮换
+
+- 默认账号显示为“怪异星人”，读取 `home/.qqcli/.env` 的 `QQ_AI_CONNECT_TOKEN`
+- 额外账号“怪异仙人”配置在 `home/.qqcli/account_tokens.json`
+- 账号轮询状态文件：`/tmp/mengde_account_round_robin.json`
+- 脚本会在发帖前自动选择账号；不要手动传 token，不要在回复里暴露 token
 
 ## 已知问题
 
@@ -45,6 +74,9 @@ PYEOF
 Linux 对单个文件名字符数有限制（约255），加上 temp dir 前缀后更容易触发。
 **抖音** `sanitize_filename` 截断值已设为 60（不是 90），快手/小红书暂无截断但若也超长可如法炮制。
 表现为下载成功但保存时报错 `Errno 36`，修复方式：减小对应平台脚本的 `sanitize_filename` 截断值。
+
+### 抖音下载偶发 IncompleteRead 错误（重试即可）
+抖音视频下载时偶尔会抛出 `IncompleteRead(n bytes read, N more expected)` 错误，这是网络瞬时波动导致的，**通常重新运行一次命令即可成功下载**。无需修改任何代码，直接重试 CLI 命令。实测重试1-2次必成功。
 
 ### 各平台文件名获取机制（重要调试依据）
 - **抖音**（douyin.py 第191行）：`desc` 字段 → fallback `douyin_{aweme_id}`。若视频 desc 全是 `#标签`，sanitize 后内容为空，触发 fallback，产生丑文件名。
